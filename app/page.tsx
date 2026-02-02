@@ -11,7 +11,7 @@ import { ArrowRight, Lock, Wallet, Shield } from "lucide-react";
 export default function Home() {
   return (
     <div className="flex h-screen flex-col">
-      <main className="flex-1 flex items-center justify-center overflow-hidden">
+      <main className="flex-1 flex items-center justify-center">
         <section className="container mx-auto px-4 py-8">
           <div className="flex flex-col items-center text-center space-y-6">
             <div className="space-y-2">
@@ -89,7 +89,7 @@ export default function Home() {
         </section>
       </main>
 
-      <footer className="border-t py-3">
+      <footer className="border-t lg:mt-auto mt-10 py-3">
         <div className="container mx-auto px-4">
           <p className="text-center text-xs text-muted-foreground">
             BasketLock - Secure Token Vesting Platform
