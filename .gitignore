@@ -10,6 +10,9 @@
 !.yarn/releases
 !.yarn/versions
 
+# bun
+.lock
+
 # testing
 /coverage
 
@@ -23,15 +26,21 @@
 # misc
 .DS_Store
 *.pem
+Thumbs.db
 
 # debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+bun-debug.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+.env.local
+.env.development
+.env.production
+.env.test
 
 # vercel
 .vercel
@@ -39,3 +48,30 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# contracts
+contracts/target/
+contracts/node_modules/
+contracts/Cargo.lock
+contracts/.anchor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# cache
+.cache/
+.parcel-cache/
+.eslintcache
+.stylelintcache
