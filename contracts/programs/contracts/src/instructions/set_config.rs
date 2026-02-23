@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::{constants::*, error::BasketError, state::Config};
+use crate::{constants::*, error::BasketError, events::*, state::Config};
 
 #[derive(Accounts)]
 pub struct SetConfig<'info> {
@@ -42,6 +42,13 @@ impl<'info> SetConfig<'info> {
         if let Some(admin) = new_admin {
             self.config.admin = admin;
         }
+
+        emit!(ConfigUpdated {
+            fee_bps: self.config.fee_bps,
+            whitelist_auth: self.config.whitelist_auth,
+            compliance_enabled: self.config.compliance_enabled,
+            new_admin: self.config.admin,
+        });
 
         Ok(())
     }

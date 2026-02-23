@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{Mint, TokenInterface};
 
-use crate::{constants::*, error::BasketError, state::*};
+use crate::{constants::*, error::BasketError, events::*, state::*};
 
 #[derive(Accounts)]
 #[instruction(basket_id: u64)]
@@ -83,6 +83,12 @@ impl<'info> CreateBasket<'info> {
         basket.basket_bump = bumps.basket;
         basket.vault_authority_bump = bumps.vault_authority;
         basket.mint_authority_bump = bumps.mint_authority;
+
+        emit!(BasketCreated {
+            basket_id,
+            owner: self.admin.key(),
+            share_mint: self.share_mint.key(),
+        });
 
         Ok(())
     }

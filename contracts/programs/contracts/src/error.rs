@@ -52,4 +52,16 @@ pub enum BasketError {
 
     #[msg("Mint config does not match the expected BasketToken")]
     MintConfigMismatch,
+
+    #[msg("Must withdraw all basket tokens (no partial withdrawal)")]
+    IncompleteWithdrawal,
+
+    #[msg("Deposit produced zero shares")]
+    ZeroSharesMinted,
+
+    #[msg("User ATA mint does not match the expected token mint")]
+    UserAtaMintMismatch,
+
+    #[msg("User ATA is not owned by a valid token program")]
+    InvalidTokenProgramOwner,
 }

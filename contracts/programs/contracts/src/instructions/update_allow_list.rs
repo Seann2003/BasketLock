@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::{constants::*, error::BasketError, state::*};
+use crate::{constants::*, error::BasketError, events::*, state::*};
 
 #[derive(Accounts)]
 pub struct UpdateAllowList<'info> {
@@ -20,7 +20,7 @@ pub struct UpdateAllowList<'info> {
     pub user: UncheckedAccount<'info>,
 
     #[account(
-        init,
+        init_if_needed,
         payer = authority,
         space = 8 + UserAllowList::INIT_SPACE,
         seeds = [
@@ -42,6 +42,12 @@ impl<'info> UpdateAllowList<'info> {
             user: self.user.key(),
             allowed,
             bump: bumps.user_allow_list,
+        });
+
+        emit!(AllowListUpdated {
+            basket: self.basket.key(),
+            user: self.user.key(),
+            allowed,
         });
 
         Ok(())

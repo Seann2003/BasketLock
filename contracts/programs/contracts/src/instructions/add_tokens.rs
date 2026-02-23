@@ -4,7 +4,7 @@ use anchor_spl::{
     token_interface::{Mint, TokenAccount, TokenInterface},
 };
 
-use crate::{constants::*, error::BasketError, state::*};
+use crate::{constants::*, error::BasketError, events::*, state::*};
 
 #[derive(Accounts)]
 pub struct AddTokens<'info> {
@@ -99,6 +99,12 @@ impl<'info> AddTokens<'info> {
             decimals: self.underlying_mint.decimals,
             enabled: true,
             bump: bumps.basket_token,
+        });
+
+        emit!(TokenAdded {
+            basket: self.basket.key(),
+            mint: self.underlying_mint.key(),
+            vault_ata: self.vault_ata.key(),
         });
 
         Ok(())

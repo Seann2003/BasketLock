@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::{constants::*, error::BasketError, state::Config};
+use crate::{constants::*, error::BasketError, events::*, state::Config};
 
 #[derive(Accounts)]
 pub struct InitConfig<'info> {
@@ -39,6 +39,13 @@ impl<'info> InitConfig<'info> {
             compliance_enabled,
             version: CURRENT_VERSION,
             bump: bumps.config,
+        });
+
+        emit!(ConfigInitialized {
+            admin: self.admin.key(),
+            whitelist_auth,
+            fee_bps,
+            compliance_enabled,
         });
 
         Ok(())
