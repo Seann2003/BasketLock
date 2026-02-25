@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 
 #[error_code]
+#[derive(PartialEq)]
 pub enum BasketError {
     #[msg("Unauthorized: caller is not the required authority")]
     Unauthorized,

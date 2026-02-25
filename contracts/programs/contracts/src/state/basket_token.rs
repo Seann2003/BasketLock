@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use static_assertions::const_assert_eq;
 
 /// Per-mint whitelist entry for a basket.
 #[account]
@@ -12,3 +13,5 @@ pub struct BasketToken {
     pub enabled: bool,
     pub bump: u8,
 }
+
+const_assert_eq!(BasketToken::INIT_SPACE, 131);

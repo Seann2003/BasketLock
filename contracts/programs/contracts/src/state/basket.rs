@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use static_assertions::const_assert_eq;
 
 use crate::constants::MAX_NAME_LEN;
 
@@ -19,6 +20,8 @@ pub struct Basket {
     pub vault_authority_bump: u8,
     pub mint_authority_bump: u8,
 }
+
+const_assert_eq!(std::mem::size_of::<Basket>(), 144);
 
 impl Basket {
     pub fn effective_fee_bps(&self, global_fee_bps: u16) -> u16 {

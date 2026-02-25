@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use static_assertions::const_assert_eq;
 
 /// Global protocol configuration
 #[account]
@@ -11,3 +12,5 @@ pub struct Config {
     pub version: u8,
     pub bump: u8,
 }
+
+const_assert_eq!(Config::INIT_SPACE, 69);

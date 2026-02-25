@@ -21,10 +21,11 @@ custom-panic = []
 
 
 [dependencies]
-anchor-lang = { version = "0.32.1", features = ["init-if-needed"] }
+anchor-lang = { version = "0.32.1", features = ["init-if-needed", "event-cpi"] }
 anchor-spl = { version = "0.32.1" }
 bytemuck = { version = "1.14", features = ["derive", "min_const_generics"] }
 solana-program = "2.1.0"
+static_assertions = "1.1"
 
 
 [lints.rust]
