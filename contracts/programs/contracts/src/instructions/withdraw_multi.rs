@@ -1,8 +1,9 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{self, Burn, Mint, TokenAccount, TokenInterface, TransferChecked};
 
-use crate::{constants::*, error::BasketError, state::*};
+use crate::{constants::*, error::BasketError, events::*, state::*};
 
+#[event_cpi]
 #[derive(Accounts)]
 pub struct WithdrawMulti<'info> {
     #[account(mut)]
@@ -12,12 +13,12 @@ pub struct WithdrawMulti<'info> {
         seeds = [CONFIG_SEED],
         bump = config.bump,
     )]
-    pub config: Account<'info, Config>,
+    pub config: Box<Account<'info, Config>>,
 
     pub basket: AccountLoader<'info, Basket>,
 
     #[account(mut)]
-    pub share_mint: InterfaceAccount<'info, Mint>,
+    pub share_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
         mut,
@@ -25,7 +26,7 @@ pub struct WithdrawMulti<'info> {
         associated_token::authority = user,
         associated_token::token_program = token_program,
     )]
-    pub user_share_ata: InterfaceAccount<'info, TokenAccount>,
+    pub user_share_ata: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// Vault authority PDA — signs transfers out.
     /// CHECK: Validated via `validate_vault_authority`.
@@ -51,10 +52,9 @@ impl<'info> WithdrawMulti<'info> {
         let accounts = &ctx.accounts;
         let remaining = ctx.remaining_accounts;
 
-        let num_tokens = Self::validate_remaining_layout(remaining.len())?;
-        Self::validate_burn_input(accounts, shares_to_burn)?;
-
         let basket = accounts.basket.load()?;
+        let num_tokens = Self::validate_remaining_layout(remaining.len(), basket.token_count)?;
+        Self::validate_burn_input(accounts, shares_to_burn)?;
         Self::validate_share_mint(accounts, &basket)?;
 
         let basket_id_bytes = basket.basket_id.to_le_bytes();
@@ -75,6 +75,7 @@ impl<'info> WithdrawMulti<'info> {
                 remaining,
                 i,
                 accounts.basket.key(),
+                accounts.user.key(),
             )?;
 
             let amount_out = Self::compute_proportional_payout(
@@ -90,15 +91,25 @@ impl<'info> WithdrawMulti<'info> {
             Self::transfer_from_vault(accounts, &leg, vault_auth_seeds, amount_out)?;
         }
 
+        emit_cpi!(WithdrawCompleted {
+            basket: accounts.basket.key(),
+            user: accounts.user.key(),
+            shares_burned: shares_to_burn,
+        });
+
         Ok(())
     }
 
-    fn validate_remaining_layout(remaining_len: usize) -> Result<usize> {
+    /// Enforce remaining accounts cover all basket tokens.
+    fn validate_remaining_layout(remaining_len: usize, token_count: u8) -> Result<usize> {
+        let expected = (token_count as usize)
+            .checked_mul(WITHDRAW_ACCOUNTS_PER_TOKEN)
+            .ok_or(BasketError::ArithmeticOverflow)?;
         require!(
-            remaining_len % WITHDRAW_ACCOUNTS_PER_TOKEN == 0,
-            BasketError::InvalidRemainingAccounts
+            remaining_len == expected,
+            BasketError::IncompleteWithdrawal
         );
-        Ok(remaining_len / WITHDRAW_ACCOUNTS_PER_TOKEN)
+        Ok(token_count as usize)
     }
 
     fn validate_burn_input(
@@ -142,6 +153,7 @@ impl<'info> WithdrawMulti<'info> {
         remaining: &'info [AccountInfo<'info>],
         index: usize,
         basket_key: Pubkey,
+        user_key: Pubkey,
     ) -> Result<WithdrawLeg<'info>> {
         let base = index * WITHDRAW_ACCOUNTS_PER_TOKEN;
         let basket_token: Account<BasketToken> = Account::try_from(&remaining[base])?;
@@ -172,7 +184,7 @@ impl<'info> WithdrawMulti<'info> {
         })
     }
 
-    /// `amount_out = vault_balance × shares_to_burn / total_supply`
+    /// `amount_out = vault_balance * shares_to_burn / total_supply`
     fn compute_proportional_payout(
         leg: &WithdrawLeg<'info>,
         shares_to_burn: u64,
@@ -189,14 +201,11 @@ impl<'info> WithdrawMulti<'info> {
         Ok(amount_out)
     }
 
-    fn read_vault_balance(vault_ata_info: &AccountInfo) -> Result<u64> {
-        let data = vault_ata_info.try_borrow_data()?;
-        let balance = u64::from_le_bytes(
-            data[64..72]
-                .try_into()
-                .map_err(|_| BasketError::InvalidBasketWiring)?,
-        );
-        Ok(balance)
+    fn read_vault_balance<'a>(vault_ata_info: &'a AccountInfo<'a>) -> Result<u64> {
+        let vault_ata: InterfaceAccount<TokenAccount> =
+            InterfaceAccount::try_from(vault_ata_info)
+                .map_err(|_| BasketError::InvalidBasketWiring)?;
+        Ok(vault_ata.amount)
     }
 
     fn burn_shares(

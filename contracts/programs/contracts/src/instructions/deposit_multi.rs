@@ -4,8 +4,9 @@ use anchor_spl::{
     token_interface::{self, Mint, MintTo, TokenAccount, TokenInterface, TransferChecked},
 };
 
-use crate::{constants::*, error::BasketError, state::*};
+use crate::{constants::*, error::BasketError, events::*, state::*};
 
+#[event_cpi]
 #[derive(Accounts)]
 pub struct DepositMulti<'info> {
     #[account(mut)]
@@ -15,7 +16,7 @@ pub struct DepositMulti<'info> {
         seeds = [CONFIG_SEED],
         bump = config.bump,
     )]
-    pub config: Account<'info, Config>,
+    pub config: Box<Account<'info, Config>>,
 
     pub basket: AccountLoader<'info, Basket>,
 
@@ -24,7 +25,7 @@ pub struct DepositMulti<'info> {
     pub mint_authority: UncheckedAccount<'info>,
 
     #[account(mut)]
-    pub share_mint: InterfaceAccount<'info, Mint>,
+    pub share_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
         init_if_needed,
@@ -33,11 +34,11 @@ pub struct DepositMulti<'info> {
         associated_token::authority = user,
         associated_token::token_program = token_program,
     )]
-    pub user_share_ata: InterfaceAccount<'info, TokenAccount>,
+    pub user_share_ata: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// Optional compliance allow-list entry.
     /// Must be provided when `config.compliance_enabled` is true.
-    pub user_allow_list: Option<Account<'info, UserAllowList>>,
+    pub user_allow_list: Option<Box<Account<'info, UserAllowList>>>,
 
     pub token_program: Interface<'info, TokenInterface>,
     pub associated_token_program: Program<'info, AssociatedToken>,
@@ -62,9 +63,10 @@ impl<'info> DepositMulti<'info> {
         let remaining = ctx.remaining_accounts;
         let num_tokens = amounts.len();
 
-        Self::validate_remaining_layout(remaining.len(), num_tokens)?;
-
         let basket = accounts.basket.load()?;
+
+        // Fix #7: Enforce that deposit covers ALL basket tokens
+        Self::validate_remaining_layout(remaining.len(), num_tokens, basket.token_count)?;
         Self::validate_share_mint(accounts, &basket)?;
 
         let basket_id_bytes = basket.basket_id.to_le_bytes();
@@ -78,6 +80,25 @@ impl<'info> DepositMulti<'info> {
 
         let fee_bps = basket.effective_fee_bps(accounts.config.fee_bps);
         drop(basket);
+        // Fix #2: Pre-read all vault balances BEFORE any transfers
+        let total_supply = accounts.share_mint.supply;
+        let mut pre_vault_balances: Vec<u64> = Vec::with_capacity(num_tokens);
+        for i in 0..num_tokens {
+            let base = i * DEPOSIT_ACCOUNTS_PER_TOKEN;
+            let vault_ata_info = &remaining[base + 3];
+            let balance = Self::read_vault_balance(vault_ata_info)?;
+            pre_vault_balances.push(balance);
+        }
+
+        // Compute total vault value (sum of all vault balances, normalised)
+        let mut total_vault_value: u128 = 0;
+        for i in 0..num_tokens {
+            let base = i * DEPOSIT_ACCOUNTS_PER_TOKEN;
+            let basket_token: Account<BasketToken> = Account::try_from(&remaining[base])?;
+            total_vault_value = total_vault_value
+                .checked_add(Self::normalise_amount(pre_vault_balances[i], basket_token.decimals)?)
+                .ok_or(BasketError::ArithmeticOverflow)?;
+        }
 
         let mut total_shares: u64 = 0;
 
@@ -99,23 +120,52 @@ impl<'info> DepositMulti<'info> {
                 Self::transfer_to_fee_vault(accounts, &leg, fee_amount)?;
             }
 
-            let shares_for_leg = Self::normalise_to_shares(
-                net_amount,
-                leg.basket_token.decimals,
-            )?;
+            // Fix #2: Vault-weighted share pricing
+            let normalised_deposit = Self::normalise_amount(net_amount, leg.basket_token.decimals)?;
+
+            let shares_for_leg = if total_supply == 0 {
+                // First depositor: shares = normalised deposit value
+                normalised_deposit as u64
+            } else {
+                // Subsequent: shares = (deposit_value / total_vault_value) * total_supply
+                normalised_deposit
+                    .checked_mul(total_supply as u128)
+                    .ok_or(BasketError::ArithmeticOverflow)?
+                    .checked_div(total_vault_value)
+                    .ok_or(BasketError::ArithmeticOverflow)? as u64
+            };
+
             total_shares = total_shares
                 .checked_add(shares_for_leg)
                 .ok_or(BasketError::ArithmeticOverflow)?;
         }
 
+        // Fix #6: Reject deposits that produce zero shares
+        require!(total_shares > 0, BasketError::ZeroSharesMinted);
+
         Self::mint_shares(accounts, mint_auth_seeds, total_shares)?;
+
+        emit_cpi!(DepositCompleted {
+            basket: accounts.basket.key(),
+            user: accounts.user.key(),
+            shares_minted: total_shares,
+        });
 
         Ok(())
     }
 
-    // ── Validation helpers ───────────────────────────────────────────────
+    // -- Validation helpers ---------------------------------------------------
 
-    fn validate_remaining_layout(remaining_len: usize, num_tokens: usize) -> Result<()> {
+    /// Fix #7: Enforce that deposit covers ALL basket tokens
+    fn validate_remaining_layout(
+        remaining_len: usize,
+        num_tokens: usize,
+        token_count: u8,
+    ) -> Result<()> {
+        require!(
+            num_tokens == token_count as usize,
+            BasketError::IncompleteWithdrawal
+        );
         require!(
             remaining_len
                 == num_tokens
@@ -171,7 +221,7 @@ impl<'info> DepositMulti<'info> {
         Ok(())
     }
 
-    // ── Per-leg parsing ──────────────────────────────────────────────────
+    // -- Per-leg parsing ------------------------------------------------------
 
     fn parse_and_validate_leg(
         remaining: &'info [AccountInfo<'info>],
@@ -225,24 +275,32 @@ impl<'info> DepositMulti<'info> {
         Ok((net, fee))
     }
 
-    /// Decimal-normalised 1:1 share calculation (POC).
-    /// shares = net_amount × 10^QSHARE_DECIMALS / 10^token_decimals
-    fn normalise_to_shares(net_amount: u64, token_decimals: u8) -> Result<u64> {
+    /// Normalise a token amount to QSHARE decimal precision (u128 intermediate).
+    fn normalise_amount(amount: u64, token_decimals: u8) -> Result<u128> {
+        let amount_128 = amount as u128;
         if token_decimals >= QSHARE_DECIMALS {
-            let divisor = 10u64
+            let divisor = 10u128
                 .checked_pow((token_decimals - QSHARE_DECIMALS) as u32)
                 .ok_or(BasketError::ArithmeticOverflow)?;
-            net_amount
+            amount_128
                 .checked_div(divisor)
                 .ok_or(BasketError::ArithmeticOverflow.into())
         } else {
-            let multiplier = 10u64
+            let multiplier = 10u128
                 .checked_pow((QSHARE_DECIMALS - token_decimals) as u32)
                 .ok_or(BasketError::ArithmeticOverflow)?;
-            net_amount
+            amount_128
                 .checked_mul(multiplier)
                 .ok_or(BasketError::ArithmeticOverflow.into())
         }
+    }
+
+    /// Read vault balance using proper TokenAccount deserialization.
+    fn read_vault_balance<'a>(vault_ata_info: &'a AccountInfo<'a>) -> Result<u64> {
+        let vault_ata: InterfaceAccount<TokenAccount> =
+            InterfaceAccount::try_from(vault_ata_info)
+                .map_err(|_| BasketError::InvalidBasketWiring)?;
+        Ok(vault_ata.amount)
     }
 
     fn transfer_to_vault(
