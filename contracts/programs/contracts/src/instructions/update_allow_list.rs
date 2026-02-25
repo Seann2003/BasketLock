@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::{constants::*, error::BasketError, events::*, state::*};
 
+#[event_cpi]
 #[derive(Accounts)]
 pub struct UpdateAllowList<'info> {
     #[account(mut)]
@@ -12,7 +13,7 @@ pub struct UpdateAllowList<'info> {
         bump = config.bump,
         constraint = config.whitelist_auth == authority.key() @ BasketError::Unauthorized,
     )]
-    pub config: Account<'info, Config>,
+    pub config: Box<Account<'info, Config>>,
 
     pub basket: AccountLoader<'info, Basket>,
 
@@ -30,23 +31,23 @@ pub struct UpdateAllowList<'info> {
         ],
         bump,
     )]
-    pub user_allow_list: Account<'info, UserAllowList>,
+    pub user_allow_list: Box<Account<'info, UserAllowList>>,
 
     pub system_program: Program<'info, System>,
 }
 
 impl<'info> UpdateAllowList<'info> {
-    pub fn handler(&mut self, allowed: bool, bumps: &UpdateAllowListBumps) -> Result<()> {
-        self.user_allow_list.set_inner(UserAllowList {
-            basket: self.basket.key(),
-            user: self.user.key(),
+    pub fn handler(ctx: Context<UpdateAllowList>, allowed: bool) -> Result<()> {
+        ctx.accounts.user_allow_list.set_inner(UserAllowList {
+            basket: ctx.accounts.basket.key(),
+            user: ctx.accounts.user.key(),
             allowed,
-            bump: bumps.user_allow_list,
+            bump: ctx.bumps.user_allow_list,
         });
 
-        emit!(AllowListUpdated {
-            basket: self.basket.key(),
-            user: self.user.key(),
+        emit_cpi!(AllowListUpdated {
+            basket: ctx.accounts.basket.key(),
+            user: ctx.accounts.user.key(),
             allowed,
         });
 

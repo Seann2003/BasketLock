@@ -8,7 +8,7 @@ pub struct VerifyBasketOwner<'info> {
     pub basket: AccountLoader<'info, Basket>,
 
     /// The QSHARE mint for this basket.
-    pub share_mint: InterfaceAccount<'info, Mint>,
+    pub share_mint: Box<InterfaceAccount<'info, Mint>>,
 
     /// Vault authority PDA.
     /// CHECK: Validated in handler against expected derivation.

@@ -3,6 +3,7 @@ use anchor_spl::token_interface::{Mint, TokenInterface};
 
 use crate::{constants::*, error::BasketError, events::*, state::*};
 
+#[event_cpi]
 #[derive(Accounts)]
 #[instruction(basket_id: u64)]
 pub struct CreateBasket<'info> {
@@ -14,7 +15,7 @@ pub struct CreateBasket<'info> {
         bump = config.bump,
         has_one = admin @ BasketError::Unauthorized,
     )]
-    pub config: Account<'info, Config>,
+    pub config: Box<Account<'info, Config>>,
 
     #[account(
         init,
@@ -49,7 +50,7 @@ pub struct CreateBasket<'info> {
         mint::authority = mint_authority,
         mint::token_program = token_program,
     )]
-    pub share_mint: InterfaceAccount<'info, Mint>,
+    pub share_mint: Box<InterfaceAccount<'info, Mint>>,
 
     pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
@@ -57,11 +58,10 @@ pub struct CreateBasket<'info> {
 
 impl<'info> CreateBasket<'info> {
     pub fn handler(
-        &mut self,
+        ctx: Context<CreateBasket>,
         basket_id: u64,
         name: &[u8; MAX_NAME_LEN],
         fee_bps_override: Option<u16>,
-        bumps: &CreateBasketBumps,
     ) -> Result<()> {
         if let Some(bps) = fee_bps_override {
             require!(
@@ -70,24 +70,24 @@ impl<'info> CreateBasket<'info> {
             );
         }
 
-        let mut basket = self.basket.load_init()?;
-        basket.owner = self.admin.key();
-        basket.share_mint = self.share_mint.key();
-        basket.vault_authority = self.vault_authority.key();
+        let mut basket = ctx.accounts.basket.load_init()?;
+        basket.owner = ctx.accounts.admin.key();
+        basket.share_mint = ctx.accounts.share_mint.key();
+        basket.vault_authority = ctx.accounts.vault_authority.key();
         basket.basket_id = basket_id;
         basket.name = *name;
         basket.fee_bps_override = fee_bps_override.unwrap_or(0);
         basket.has_fee_override = u8::from(fee_bps_override.is_some());
         basket.token_count = 0;
         basket.version = CURRENT_VERSION;
-        basket.basket_bump = bumps.basket;
-        basket.vault_authority_bump = bumps.vault_authority;
-        basket.mint_authority_bump = bumps.mint_authority;
+        basket.basket_bump = ctx.bumps.basket;
+        basket.vault_authority_bump = ctx.bumps.vault_authority;
+        basket.mint_authority_bump = ctx.bumps.mint_authority;
 
-        emit!(BasketCreated {
+        emit_cpi!(BasketCreated {
             basket_id,
-            owner: self.admin.key(),
-            share_mint: self.share_mint.key(),
+            owner: ctx.accounts.admin.key(),
+            share_mint: ctx.accounts.share_mint.key(),
         });
 
         Ok(())

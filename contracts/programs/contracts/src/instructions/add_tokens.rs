@@ -6,6 +6,7 @@ use anchor_spl::{
 
 use crate::{constants::*, error::BasketError, events::*, state::*};
 
+#[event_cpi]
 #[derive(Accounts)]
 pub struct AddTokens<'info> {
     #[account(mut)]
@@ -16,13 +17,13 @@ pub struct AddTokens<'info> {
         bump = config.bump,
         has_one = admin @ BasketError::Unauthorized,
     )]
-    pub config: Account<'info, Config>,
+    pub config: Box<Account<'info, Config>>,
 
     #[account(mut)]
     pub basket: AccountLoader<'info, Basket>,
 
     /// The underlying SPL token mint being registered.
-    pub underlying_mint: InterfaceAccount<'info, Mint>,
+    pub underlying_mint: Box<InterfaceAccount<'info, Mint>>,
 
     /// Vault authority PDA — validated against the stored bump in the handler.
     /// CHECK: Validated in handler against basket.vault_authority.
@@ -39,7 +40,7 @@ pub struct AddTokens<'info> {
         ],
         bump,
     )]
-    pub basket_token: Account<'info, BasketToken>,
+    pub basket_token: Box<Account<'info, BasketToken>>,
 
     /// Vault ATA for this mint (owned by vault_authority).
     #[account(
@@ -49,7 +50,7 @@ pub struct AddTokens<'info> {
         associated_token::authority = vault_authority,
         associated_token::token_program = token_program,
     )]
-    pub vault_ata: InterfaceAccount<'info, TokenAccount>,
+    pub vault_ata: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         init,
@@ -63,7 +64,7 @@ pub struct AddTokens<'info> {
         ],
         bump,
     )]
-    pub fee_vault_ata: InterfaceAccount<'info, TokenAccount>,
+    pub fee_vault_ata: Box<InterfaceAccount<'info, TokenAccount>>,
 
     pub token_program: Interface<'info, TokenInterface>,
     pub associated_token_program: Program<'info, AssociatedToken>,
@@ -71,11 +72,11 @@ pub struct AddTokens<'info> {
 }
 
 impl<'info> AddTokens<'info> {
-    pub fn handler(&mut self, bumps: &AddTokensBumps) -> Result<()> {
-        let mut basket = self.basket.load_mut()?;
+    pub fn handler(ctx: Context<AddTokens>) -> Result<()> {
+        let mut basket = ctx.accounts.basket.load_mut()?;
 
         require!(
-            self.vault_authority.key() == basket.vault_authority,
+            ctx.accounts.vault_authority.key() == basket.vault_authority,
             BasketError::VaultAuthMismatch
         );
         require!(
@@ -91,20 +92,20 @@ impl<'info> AddTokens<'info> {
         // Drop the borrow before writing to basket_token (same tx scope)
         drop(basket);
 
-        self.basket_token.set_inner(BasketToken {
-            basket: self.basket.key(),
-            mint: self.underlying_mint.key(),
-            vault_ata: self.vault_ata.key(),
-            fee_vault_ata: self.fee_vault_ata.key(),
-            decimals: self.underlying_mint.decimals,
+        ctx.accounts.basket_token.set_inner(BasketToken {
+            basket: ctx.accounts.basket.key(),
+            mint: ctx.accounts.underlying_mint.key(),
+            vault_ata: ctx.accounts.vault_ata.key(),
+            fee_vault_ata: ctx.accounts.fee_vault_ata.key(),
+            decimals: ctx.accounts.underlying_mint.decimals,
             enabled: true,
-            bump: bumps.basket_token,
+            bump: ctx.bumps.basket_token,
         });
 
-        emit!(TokenAdded {
-            basket: self.basket.key(),
-            mint: self.underlying_mint.key(),
-            vault_ata: self.vault_ata.key(),
+        emit_cpi!(TokenAdded {
+            basket: ctx.accounts.basket.key(),
+            mint: ctx.accounts.underlying_mint.key(),
+            vault_ata: ctx.accounts.vault_ata.key(),
         });
 
         Ok(())

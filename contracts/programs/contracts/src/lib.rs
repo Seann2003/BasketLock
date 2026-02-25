@@ -23,7 +23,7 @@ pub mod contracts {
         whitelist_auth: Pubkey,
         compliance_enabled: bool,
     ) -> Result<()> {
-        ctx.accounts.handler(fee_bps, whitelist_auth, compliance_enabled, &ctx.bumps)
+        InitConfig::handler(ctx, fee_bps, whitelist_auth, compliance_enabled)
     }
 
     pub fn set_config(
@@ -33,7 +33,7 @@ pub mod contracts {
         compliance_enabled: Option<bool>,
         new_admin: Option<Pubkey>,
     ) -> Result<()> {
-        ctx.accounts.handler(fee_bps, whitelist_auth, compliance_enabled, new_admin)
+        SetConfig::handler(ctx, fee_bps, whitelist_auth, compliance_enabled, new_admin)
     }
 
     pub fn create_basket(
@@ -42,15 +42,15 @@ pub mod contracts {
         name: [u8; MAX_NAME_LEN],
         fee_bps_override: Option<u16>,
     ) -> Result<()> {
-        ctx.accounts.handler(basket_id, &name, fee_bps_override, &ctx.bumps)
+        CreateBasket::handler(ctx, basket_id, &name, fee_bps_override)
     }
 
     pub fn add_tokens(ctx: Context<AddTokens>) -> Result<()> {
-        ctx.accounts.handler(&ctx.bumps)
+        AddTokens::handler(ctx)
     }
 
     pub fn update_allow_list(ctx: Context<UpdateAllowList>, allowed: bool) -> Result<()> {
-        ctx.accounts.handler(allowed, &ctx.bumps)
+        UpdateAllowList::handler(ctx, allowed)
     }
 
     pub fn deposit_multi<'info>(
