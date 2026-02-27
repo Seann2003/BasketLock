@@ -54,7 +54,7 @@ export const userAllowListCodec = getStructCodec([
 ]);
 
 export function decodeAccount<T>(
-  codec: { read: (bytes: ReadonlyUint8Array, offset: number) => [T, number] },
+  codec: { read: (bytes: Uint8Array, offset: number) => [T, number] },
   data: Uint8Array,
 ): T {
   const [decoded] = codec.read(data, DISCRIMINATOR_SIZE);
