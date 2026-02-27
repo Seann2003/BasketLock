@@ -75,7 +75,6 @@ impl<'info> WithdrawMulti<'info> {
                 remaining,
                 i,
                 accounts.basket.key(),
-                accounts.user.key(),
             )?;
 
             let amount_out = Self::compute_proportional_payout(
@@ -153,7 +152,6 @@ impl<'info> WithdrawMulti<'info> {
         remaining: &'info [AccountInfo<'info>],
         index: usize,
         basket_key: Pubkey,
-        user_key: Pubkey,
     ) -> Result<WithdrawLeg<'info>> {
         let base = index * WITHDRAW_ACCOUNTS_PER_TOKEN;
         let basket_token: Account<BasketToken> = Account::try_from(&remaining[base])?;
