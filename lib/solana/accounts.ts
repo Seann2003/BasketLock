@@ -1,0 +1,128 @@
+import type { Address, Rpc, GetAccountInfoApi, GetProgramAccountsApi } from "@solana/kit";
+import { fetchEncodedAccount } from "@solana/kit";
+import { PROGRAM_ID, DISCRIMINATORS, DISCRIMINATOR_SIZE } from "./constants";
+import {
+  getConfigPda,
+  getBasketPda,
+  getBasketTokenPda,
+  getUserAllowListPda,
+} from "./pdas";
+import {
+  type ParsedConfig,
+  type ParsedBasket,
+  type ParsedBasketToken,
+  type ParsedUserAllowList,
+  parseConfig,
+  parseBasket,
+  parseBasketToken,
+  parseUserAllowList,
+} from "./types";
+import { getAddressEncoder } from "@solana/kit";
+
+type FetchRpc = Rpc<GetAccountInfoApi & GetProgramAccountsApi>;
+
+async function fetchAndDecode<T>(
+  rpc: FetchRpc,
+  address: Address,
+  parser: (data: Uint8Array) => T,
+): Promise<T | null> {
+  const account = await fetchEncodedAccount(rpc, address);
+  if (!account.exists) return null;
+  return parser(new Uint8Array(account.data));
+}
+
+export async function fetchConfig(rpc: FetchRpc): Promise<ParsedConfig | null> {
+  const [address] = await getConfigPda();
+  return fetchAndDecode(rpc, address, parseConfig);
+}
+
+export async function fetchBasket(
+  rpc: FetchRpc,
+  basketId: bigint,
+): Promise<ParsedBasket | null> {
+  const [address] = await getBasketPda(basketId);
+  return fetchAndDecode(rpc, address, parseBasket);
+}
+
+export async function fetchBasketToken(
+  rpc: FetchRpc,
+  basket: Address,
+  mint: Address,
+): Promise<ParsedBasketToken | null> {
+  const [address] = await getBasketTokenPda(basket, mint);
+  return fetchAndDecode(rpc, address, parseBasketToken);
+}
+
+export async function fetchUserAllowList(
+  rpc: FetchRpc,
+  basket: Address,
+  user: Address,
+): Promise<ParsedUserAllowList | null> {
+  const [address] = await getUserAllowListPda(basket, user);
+  return fetchAndDecode(rpc, address, parseUserAllowList);
+}
+
+export async function fetchAllBaskets(rpc: FetchRpc): Promise<ParsedBasket[]> {
+  const accounts = await rpc
+    .getProgramAccounts(PROGRAM_ID, {
+      encoding: "base64",
+      filters: [
+        {
+          memcmp: {
+            offset: 0n,
+            bytes: Buffer.from(DISCRIMINATORS.basket).toString("base64"),
+            encoding: "base64",
+          },
+        },
+      ],
+    })
+    .send();
+
+  return accounts.map((a) => {
+    const data =
+      typeof a.account.data === "string"
+        ? Buffer.from(a.account.data, "base64")
+        : a.account.data instanceof Uint8Array
+          ? a.account.data
+          : Buffer.from(a.account.data[0], "base64");
+    return parseBasket(new Uint8Array(data));
+  });
+}
+
+export async function fetchAllBasketTokens(
+  rpc: FetchRpc,
+  basket: Address,
+): Promise<ParsedBasketToken[]> {
+  const addressEncoder = getAddressEncoder();
+  const accounts = await rpc
+    .getProgramAccounts(PROGRAM_ID, {
+      encoding: "base64",
+      filters: [
+        {
+          memcmp: {
+            offset: 0n,
+            bytes: Buffer.from(DISCRIMINATORS.basketToken).toString("base64"),
+            encoding: "base64",
+          },
+        },
+        {
+          memcmp: {
+            offset: BigInt(DISCRIMINATOR_SIZE),
+            bytes: Buffer.from(addressEncoder.encode(basket)).toString("base64"),
+            encoding: "base64",
+          },
+        },
+      ],
+    })
+    .send();
+
+  return accounts.map((a) => {
+    const data =
+      typeof a.account.data === "string"
+        ? Buffer.from(a.account.data, "base64")
+        : a.account.data instanceof Uint8Array
+          ? a.account.data
+          : Buffer.from(a.account.data[0], "base64");
+    return parseBasketToken(new Uint8Array(data));
+  });
+}
