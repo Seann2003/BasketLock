@@ -1,5 +1,5 @@
-import type { Address, Rpc, GetAccountInfoApi, GetProgramAccountsApi } from "@solana/kit";
-import { fetchEncodedAccount } from "@solana/kit";
+import type { Address, Rpc, GetAccountInfoApi, GetProgramAccountsApi, Base64EncodedBytes } from "@solana/kit";
+import { fetchEncodedAccount, getAddressEncoder } from "@solana/kit";
 import { PROGRAM_ID, DISCRIMINATORS, DISCRIMINATOR_SIZE } from "./constants";
 import {
   getConfigPda,
@@ -17,7 +17,6 @@ import {
   parseBasketToken,
   parseUserAllowList,
 } from "./types";
-import { getAddressEncoder } from "@solana/kit";
 
 type FetchRpc = Rpc<GetAccountInfoApi & GetProgramAccountsApi>;
 
@@ -62,6 +61,14 @@ export async function fetchUserAllowList(
   return fetchAndDecode(rpc, address, parseUserAllowList);
 }
 
+function extractAccountData(account: { data: unknown }): Uint8Array {
+  const d = account.data;
+  if (d instanceof Uint8Array) return d;
+  if (typeof d === "string") return new Uint8Array(Buffer.from(d, "base64"));
+  if (Array.isArray(d)) return new Uint8Array(Buffer.from(d[0] as string, "base64"));
+  return new Uint8Array(d as ArrayBuffer);
+}
+
 export async function fetchAllBaskets(rpc: FetchRpc): Promise<ParsedBasket[]> {
   const accounts = await rpc
     .getProgramAccounts(PROGRAM_ID, {
@@ -69,8 +76,8 @@ export async function fetchAllBaskets(rpc: FetchRpc): Promise<ParsedBasket[]> {
       filters: [
         {
           memcmp: {
-            offset: 0n,
-            bytes: Buffer.from(DISCRIMINATORS.basket).toString("base64"),
+            offset: BigInt(0),
+            bytes: Buffer.from(DISCRIMINATORS.basket).toString("base64") as Base64EncodedBytes,
             encoding: "base64",
           },
         },
@@ -78,15 +85,9 @@ export async function fetchAllBaskets(rpc: FetchRpc): Promise<ParsedBasket[]> {
     })
     .send();
 
-  return accounts.map((a) => {
-    const data =
-      typeof a.account.data === "string"
-        ? Buffer.from(a.account.data, "base64")
-        : a.account.data instanceof Uint8Array
-          ? a.account.data
-          : Buffer.from(a.account.data[0], "base64");
-    return parseBasket(new Uint8Array(data));
-  });
+  return (accounts as unknown as { account: { data: unknown } }[]).map((a) =>
+    parseBasket(extractAccountData(a.account)),
+  );
 }
 
 export async function fetchAllBasketTokens(
@@ -100,15 +101,15 @@ export async function fetchAllBasketTokens(
       filters: [
         {
           memcmp: {
-            offset: 0n,
-            bytes: Buffer.from(DISCRIMINATORS.basketToken).toString("base64"),
+            offset: BigInt(0),
+            bytes: Buffer.from(DISCRIMINATORS.basketToken).toString("base64") as Base64EncodedBytes,
             encoding: "base64",
           },
         },
         {
           memcmp: {
             offset: BigInt(DISCRIMINATOR_SIZE),
-            bytes: Buffer.from(addressEncoder.encode(basket)).toString("base64"),
+            bytes: Buffer.from(addressEncoder.encode(basket)).toString("base64") as Base64EncodedBytes,
             encoding: "base64",
           },
         },
@@ -116,13 +117,7 @@ export async function fetchAllBasketTokens(
     })
     .send();
 
-  return accounts.map((a) => {
-    const data =
-      typeof a.account.data === "string"
-        ? Buffer.from(a.account.data, "base64")
-        : a.account.data instanceof Uint8Array
-          ? a.account.data
-          : Buffer.from(a.account.data[0], "base64");
-    return parseBasketToken(new Uint8Array(data));
-  });
+  return (accounts as unknown as { account: { data: unknown } }[]).map((a) =>
+    parseBasketToken(extractAccountData(a.account)),
+  );
 }

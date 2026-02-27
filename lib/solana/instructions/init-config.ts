@@ -1,6 +1,6 @@
 import {
   type Address,
-  type IInstruction,
+  type Instruction,
   AccountRole,
   getU16Codec,
   getBooleanCodec,
@@ -14,7 +14,7 @@ export async function buildInitConfigIx(
   feeBps: number,
   whitelistAuth: Address,
   complianceEnabled: boolean,
-): Promise<IInstruction> {
+): Promise<Instruction> {
   const [configAddress] = await getConfigPda();
   const [eventAuthority] = await getEventAuthorityPda();
 

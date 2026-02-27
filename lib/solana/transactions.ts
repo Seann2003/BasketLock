@@ -1,6 +1,6 @@
 import {
   type Address,
-  type IInstruction,
+  type Instruction,
   type Rpc,
   type RpcSubscriptions,
   type GetLatestBlockhashApi,
@@ -9,6 +9,7 @@ import {
   type SendTransactionApi,
   type SignatureNotificationsApi,
   type SlotNotificationsApi,
+  type Transaction,
   pipe,
   createTransactionMessage,
   setTransactionMessageFeePayer,
@@ -29,7 +30,7 @@ type TransactionRpcSubscriptions = RpcSubscriptions<
 
 export async function buildTransaction(
   rpc: TransactionRpc,
-  instructions: IInstruction[],
+  instructions: Instruction[],
   payer: Address,
 ) {
   const { value: latestBlockhash } = await rpc.getLatestBlockhash().send();
@@ -50,19 +51,13 @@ export async function buildTransaction(
 export async function buildAndSendTransaction(
   rpc: TransactionRpc,
   rpcSubscriptions: TransactionRpcSubscriptions,
-  instructions: IInstruction[],
+  instructions: Instruction[],
   payer: Address,
-  signTx: (tx: Parameters<typeof signTransaction>[1]) => Promise<ReturnType<typeof signTransaction>>,
-  keyPairs?: CryptoKeyPair[],
+  keyPairs: CryptoKeyPair[],
 ) {
-  const { transaction, latestBlockhash } = await buildTransaction(rpc, instructions, payer);
+  const { transaction } = await buildTransaction(rpc, instructions, payer);
 
-  let signed;
-  if (keyPairs && keyPairs.length > 0) {
-    signed = await signTransaction(keyPairs, transaction);
-  } else {
-    signed = await signTx(transaction);
-  }
+  const signed = await signTransaction(keyPairs, transaction);
 
   const sendAndConfirm = sendAndConfirmTransactionFactory({ rpc, rpcSubscriptions });
   await sendAndConfirm(signed, { commitment: "confirmed" });

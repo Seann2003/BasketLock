@@ -1,6 +1,6 @@
 import {
   type Address,
-  type IInstruction,
+  type Instruction,
   AccountRole,
   getU64Codec,
 } from "@solana/kit";
@@ -24,7 +24,7 @@ export async function buildWithdrawMultiIx(
   sharesToBurn: bigint,
   tokenMints: Address[],
   tokenProgram: Address,
-): Promise<IInstruction> {
+): Promise<Instruction> {
   const [configAddress] = await getConfigPda();
   const [userShareAta] = await getAssociatedTokenAddress(payer, tokenProgram, shareMint);
   const [eventAuthority] = await getEventAuthorityPda();

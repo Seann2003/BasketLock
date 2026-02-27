@@ -1,6 +1,6 @@
 import {
   type Address,
-  type IInstruction,
+  type Instruction,
   AccountRole,
 } from "@solana/kit";
 import {
@@ -23,7 +23,7 @@ export async function buildAddTokensIx(
   underlyingMint: Address,
   vaultAuthority: Address,
   tokenProgram: Address,
-): Promise<IInstruction> {
+): Promise<Instruction> {
   const [configAddress] = await getConfigPda();
   const [basketTokenAddress] = await getBasketTokenPda(basketAddress, underlyingMint);
   const [feeVaultAddress] = await getFeeVaultPda(basketAddress, underlyingMint);

@@ -1,6 +1,6 @@
 import {
   type Address,
-  type IInstruction,
+  type Instruction,
   AccountRole,
   getBooleanCodec,
 } from "@solana/kit";
@@ -12,7 +12,7 @@ export async function buildUpdateAllowListIx(
   basketAddress: Address,
   userAddress: Address,
   allowed: boolean,
-): Promise<IInstruction> {
+): Promise<Instruction> {
   const [configAddress] = await getConfigPda();
   const [userAllowListAddress] = await getUserAllowListPda(basketAddress, userAddress);
   const [eventAuthority] = await getEventAuthorityPda();

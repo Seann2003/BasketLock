@@ -1,6 +1,6 @@
 import {
   type Address,
-  type IInstruction,
+  type Instruction,
   AccountRole,
   getU64Codec,
   getU32Codec,
@@ -30,7 +30,7 @@ export async function buildDepositMultiIx(
   vaultAuthority: Address,
   tokenProgram: Address,
   userAllowList: Address | null = null,
-): Promise<IInstruction> {
+): Promise<Instruction> {
   const [configAddress] = await getConfigPda();
   const [mintAuthority] = await getMintAuthorityPda(basketId);
   const [userShareAta] = await getAssociatedTokenAddress(payer, tokenProgram, shareMint);

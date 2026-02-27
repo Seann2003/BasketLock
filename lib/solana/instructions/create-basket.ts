@@ -1,6 +1,6 @@
 import {
   type Address,
-  type IInstruction,
+  type Instruction,
   AccountRole,
   getU64Codec,
   getU16Codec,
@@ -34,7 +34,7 @@ export async function buildCreateBasketIx(
   shareMintAddress: Address,
   tokenProgram: Address,
   feeBpsOverride: number | null = null,
-): Promise<IInstruction> {
+): Promise<Instruction> {
   const [configAddress] = await getConfigPda();
   const [basketAddress] = await getBasketPda(basketId);
   const [vaultAuthority] = await getVaultAuthorityPda(basketId);
