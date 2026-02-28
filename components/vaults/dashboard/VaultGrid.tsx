@@ -1,55 +1,32 @@
 "use client";
 
 import * as React from "react";
-
 import { VaultCard } from "./VaultCard";
-import type { Vault, VaultStatus } from "../types";
+import type { BasketView } from "@/lib/types";
 
 interface VaultGridProps {
-  vaults: Vault[];
-  filter: VaultStatus | "all";
+  baskets: BasketView[];
   searchQuery: string;
-  onView?: (vault: Vault) => void;
-  onManage?: (vault: Vault) => void;
-  onTransfer?: (vault: Vault) => void;
 }
 
-export function VaultGrid({
-  vaults,
-  filter,
-  searchQuery,
-  onView,
-  onManage,
-  onTransfer,
-}: VaultGridProps) {
-  const filteredVaults = React.useMemo(() => {
-    let result = vaults;
+export function VaultGrid({ baskets, searchQuery }: VaultGridProps) {
+  const filtered = React.useMemo(() => {
+    if (!searchQuery.trim()) return baskets;
+    const query = searchQuery.toLowerCase();
+    return baskets.filter(
+      (b) =>
+        b.name.toLowerCase().includes(query) ||
+        b.owner.toLowerCase().includes(query) ||
+        b.basketId.toString().includes(query),
+    );
+  }, [baskets, searchQuery]);
 
-    if (filter !== "all") {
-      result = result.filter((vault) => vault.status === filter);
-    }
-
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      result = result.filter(
-        (vault) =>
-          vault.name.toLowerCase().includes(query) ||
-          vault.description.toLowerCase().includes(query) ||
-          vault.tokens.some((token) =>
-            token.symbol.toLowerCase().includes(query)
-          )
-      );
-    }
-
-    return result;
-  }, [vaults, filter, searchQuery]);
-
-  if (filteredVaults.length === 0) {
+  if (filtered.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
-        <p className="text-muted-foreground">No vaults found</p>
+        <p className="text-muted-foreground">No baskets found</p>
         <p className="text-sm text-muted-foreground mt-1">
-          Try adjusting your filters or search query
+          Try adjusting your search query
         </p>
       </div>
     );
@@ -57,14 +34,8 @@ export function VaultGrid({
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-      {filteredVaults.map((vault) => (
-        <VaultCard
-          key={vault.id}
-          vault={vault}
-          onView={onView}
-          onManage={onManage}
-          onTransfer={onTransfer}
-        />
+      {filtered.map((basket) => (
+        <VaultCard key={basket.basketId.toString()} basket={basket} />
       ))}
     </div>
   );

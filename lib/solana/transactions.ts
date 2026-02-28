@@ -60,7 +60,8 @@ export async function buildAndSendTransaction(
   const signed = await signTransaction(keyPairs, transaction);
 
   const sendAndConfirm = sendAndConfirmTransactionFactory({ rpc, rpcSubscriptions });
-  await sendAndConfirm(signed, { commitment: "confirmed" });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await sendAndConfirm(signed as any, { commitment: "confirmed" });
 
   return getSignatureFromTransaction(signed);
 }

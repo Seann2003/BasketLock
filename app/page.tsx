@@ -32,9 +32,9 @@ export default function Home() {
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
-              <Link href="/create">
+              <Link href="/vaults">
                 <Button variant="outline" size="lg">
-                  Create Vault
+                  Browse Baskets
                 </Button>
               </Link>
             </div>
