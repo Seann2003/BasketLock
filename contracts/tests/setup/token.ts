@@ -14,7 +14,6 @@ import {
   Transaction,
 } from "@solana/web3.js";
 import { LiteSVMProvider } from "anchor-litesvm";
-import { LiteSVM } from "litesvm";
 
 export async function createTestMint(
   provider: LiteSVMProvider,
